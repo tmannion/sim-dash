@@ -4,7 +4,7 @@
   "idf.openOcdConfigs": [
     "board/esp32c3-builtin.cfg"
   ],
-  "idf.portWin": "detect",
+  "idf.portWin": "COM8",
   "idf.currentSetup": "C:\\esp\\v6.0.1\\esp-idf",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32c3"
@@ -14,5 +14,6 @@
     "--background-index",
     "--query-driver=**",
     "--compile-commands-dir=c:\\Users\\tmann\\sim-dash\\build"
-  ]
+  ],
+  "idf.flashType": "UART"
 }
