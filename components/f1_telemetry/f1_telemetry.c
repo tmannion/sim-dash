@@ -81,6 +81,7 @@ void f1_telemetry_init(F1GameVersion game_version)
     s_game_version = game_version;
     s_detected_version = F1_GAME_AUTO;
     memset(&s_telemetry, 0, sizeof(s_telemetry));
+    s_telemetry.max_rpm = 13000; // sensible default until CarStatus packet arrives
     ESP_LOGI(TAG, "Telemetry parser initialised (mode: %d)", game_version);
 }
 

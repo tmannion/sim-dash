@@ -1,148 +1,154 @@
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_log.h"
 #include "led_strip.h"
 #include "f1_telemetry.h"
 #include "udp_receiver.h"
-#include "esp_log.h"
 
-static const char *TAG = "sim-dash";
+static const char *TAG = "sim_dash";
 
+// ----------------------------------------------------------------
+// RPM zone thresholds — percentage of max RPM
+// Adjust these to taste once you have real feel for the timing
+// ----------------------------------------------------------------
+#define REV_OFF_PCT         60   // below this: LED off
+#define REV_GREEN_PCT       60   // 60–85%: green
+#define REV_RED_PCT         85   // 85–99%: red
+#define REV_SHIFT_PCT       99   // 99%+:   purple flash
+
+// ----------------------------------------------------------------
+// Rev indicator
+// ----------------------------------------------------------------
+static void update_rev_indicator(uint16_t rpm, uint16_t max_rpm)
+{
+    if (max_rpm == 0) {
+        led_strip_set_pixel(0, 0, 0, 0);
+        return;
+    }
+
+    uint8_t rpm_pct = (uint8_t)(((uint32_t)rpm * 100UL) / max_rpm);
+
+    if (rpm_pct >= REV_SHIFT_PCT) {
+        // Shift point — flash purple
+        static bool flash_state = false;
+        flash_state = !flash_state;
+        if (flash_state) {
+            led_strip_set_pixel(0, 180, 0, 255); // purple
+        } else {
+            led_strip_set_pixel(0, 0, 0, 0);     // off
+        }
+
+    } else if (rpm_pct >= REV_RED_PCT) {
+        led_strip_set_pixel(0, 255, 0, 0);       // red
+
+    } else if (rpm_pct >= REV_GREEN_PCT) {
+        led_strip_set_pixel(0, 0, 255, 0);       // green
+
+    } else {
+        led_strip_set_pixel(0, 0, 0, 0);         // off
+    }
+}
+
+// ----------------------------------------------------------------
+// DRS indicator — placeholder for when the strip arrives.
+// With a multi-LED strip, the last LED will show DRS state:
+//   dim blue  = DRS allowed but not active
+//   bright blue = DRS active (open)
+//   off       = DRS not available
+// ----------------------------------------------------------------
+static void update_drs_indicator(bool allowed, bool active)
+{
+    // TODO: implement when LED strip arrives and LED_STRIP_LED_COUNT > 1
+    (void)allowed;
+    (void)active;
+}
+
+// ----------------------------------------------------------------
+// Tyre wear indicators — placeholder for when the strip arrives.
+// With a multi-LED strip, four dedicated LEDs will show wear per
+// corner: green (fresh) → yellow → red (worn).
+//   tyre_wear_fl, fr, rl, rr are 0–100 (%)
+// Note: tyre wear comes from CarDamageData (packet ID 9).
+// The f1_telemetry component will need a parser for that packet
+// added in a future branch before these values will be non-zero.
+// ----------------------------------------------------------------
+static void update_tyre_indicators(uint8_t fl, uint8_t fr,
+                                    uint8_t rl, uint8_t rr)
+{
+    // TODO: implement when LED strip arrives and LED_STRIP_LED_COUNT > 1
+    (void)fl; (void)fr; (void)rl; (void)rr;
+}
+
+// ----------------------------------------------------------------
+// Brake bias indicator — placeholder for when the strip arrives.
+// With a multi-LED strip, a small bargraph of LEDs will show
+// front brake bias percentage (typically 55–65% in F1).
+// ----------------------------------------------------------------
+static void update_brake_bias_indicator(float bias)
+{
+    // TODO: implement when LED strip arrives and LED_STRIP_LED_COUNT > 1
+    (void)bias;
+}
+
+// ----------------------------------------------------------------
+// Dashboard update task — runs at ~60fps
+// Reads latest telemetry and updates all LED indicators.
+// ----------------------------------------------------------------
+static void dashboard_task(void *pvParameters)
+{
+    TelemetryData telem = {0};
+
+    while (1) {
+        if (f1_telemetry_get(&telem)) {
+            // Rev indicator — active now with single LED
+            update_rev_indicator(telem.engine_rpm, telem.max_rpm);
+
+            // All other indicators stubbed until strip arrives
+            update_drs_indicator(telem.drs_allowed, telem.drs_active);
+            update_tyre_indicators(telem.tyre_wear_fl, telem.tyre_wear_fr,
+                                   telem.tyre_wear_rl, telem.tyre_wear_rr);
+            update_brake_bias_indicator(telem.brake_bias);
+
+            ESP_LOGI(TAG, "RPM=%d maxRPM=%d pct=%d",
+                    telem.engine_rpm, telem.max_rpm,
+                    telem.max_rpm > 0 ? (telem.engine_rpm * 100 / telem.max_rpm) : 0);
+
+        } else {
+            // No valid telemetry yet — keep LED off
+            led_strip_set_pixel(0, 0, 0, 0);
+        }
+
+        led_strip_refresh();
+        vTaskDelay(pdMS_TO_TICKS(16)); // ~60fps
+    }
+}
+
+// ----------------------------------------------------------------
+// Entry point
+// ----------------------------------------------------------------
 void app_main(void)
 {
-    // *** LED STRIP TEST ***
-    // led_strip_init();
-    // led_strip_clear();
+    ESP_LOGI(TAG, "Sim Dashboard starting...");
 
-    // while (1) {
-    //     // Red for 1 second
-    //     led_strip_set_pixel(0, 255, 0, 0);
-    //     led_strip_refresh();
-    //     vTaskDelay(pdMS_TO_TICKS(1000));
+    // Initialise LED strip — must come before any led_strip_set_pixel calls
+    led_strip_init();
+    led_strip_clear();
 
-    //     // Green for 1 second
-    //     led_strip_set_pixel(0, 0, 255, 0);
-    //     led_strip_refresh();
-    //     vTaskDelay(pdMS_TO_TICKS(1000));
-
-    //     // Blue for 1 second
-    //     led_strip_set_pixel(0, 0, 0, 255);
-    //     led_strip_refresh();
-    //     vTaskDelay(pdMS_TO_TICKS(1000));
-
-    //     // Off for half a second
-    //     led_strip_clear();
-    //     vTaskDelay(pdMS_TO_TICKS(500));
-    // }
-
-    // *** TELEMETRY DATA TEST ***
-
-    // f1_telemetry_init(F1_GAME_AUTO);
-
-    // // Build a minimal fake F1 2021 CarTelemetryData packet.
-    // // We only need to fill in the fields we actually parse.
-    // // Total size must match sizeof(F1_21_PacketCarTelemetryData).
-    // // We use a zeroed buffer and set specific fields by offset.
-    // //
-    // // Header layout (packed, 24 bytes):
-    // //   [0-1]  packetFormat = 2021 (0x07E5)
-    // //   [2]    gameMajorVersion
-    // //   [3]    gameMinorVersion
-    // //   [4]    packetVersion
-    // //   [5]    packetId = 6 (CAR_TELEMETRY)
-    // //   [6-13] sessionUID (8 bytes)
-    // //   [14-17] sessionTime (float)
-    // //   [18-21] frameIdentifier
-    // //   [22]   playerCarIndex = 0
-    // //   [23]   secondaryPlayerCarIndex
-
-    // uint8_t fake_packet[1347] = {0}; // sizeof(F1_21_PacketCarTelemetryData)
-
-    // // packetFormat = 2021 (little-endian)
-    // fake_packet[0] = 0xE5;
-    // fake_packet[1] = 0x07;
-
-    // // packetId = 6 (CAR_TELEMETRY)
-    // fake_packet[5] = 6;
-
-    // // playerCarIndex = 0
-    // fake_packet[22] = 0;
-
-    // // Car 0 telemetry data starts at byte 24 (after the 24-byte header)
-    // // CarTelemetryData layout (packed):
-    // //   [0-1]  speed (uint16)
-    // //   [2]    throttle_raw (uint8)
-    // //   [3]    steer (int8)
-    // //   [4]    brake_raw (uint8)
-    // //   [5]    clutch (uint8)
-    // //   [6]    gear (int8)
-    // //   [7-8]  engineRPM (uint16)
-    // //   [9]    drs (uint8)
-    // //   ... rest zeroed
-
-    // uint32_t car0_offset = 24; // header is 24 bytes
-
-    // // speed = 200 km/h (little-endian)
-    // fake_packet[car0_offset + 0] = 200;
-    // fake_packet[car0_offset + 1] = 0;
-
-    // // throttle = 204 (raw 0-255, = ~80%)
-    // fake_packet[car0_offset + 2] = 204;
-
-    // // brake = 0
-    // fake_packet[car0_offset + 4] = 0;
-
-    // // gear = 6
-    // fake_packet[car0_offset + 6] = 6;
-
-    // // engineRPM = 11500 (0x2CEC little-endian)
-    // fake_packet[car0_offset + 7] = 0xEC;
-    // fake_packet[car0_offset + 8] = 0x2C;
-
-    // // drs = 1 (active)
-    // fake_packet[car0_offset + 9] = 1;
-
-    // // Parse the fake packet
-    // f1_telemetry_parse(fake_packet, sizeof(fake_packet));
-
-    // // Read back and verify
-    // TelemetryData telem = {0};
-    // if (f1_telemetry_get(&telem)) {
-    //     ESP_LOGI(TAG, "Parse OK:");
-    //     ESP_LOGI(TAG, "  RPM      = %d (expected 11500)", telem.engine_rpm);
-    //     ESP_LOGI(TAG, "  Gear     = %d (expected 6)",     telem.gear);
-    //     ESP_LOGI(TAG, "  Throttle = %d%% (expected ~80)", telem.throttle);
-    //     ESP_LOGI(TAG, "  Brake    = %d%% (expected 0)",   telem.brake);
-    //     ESP_LOGI(TAG, "  DRS      = %d (expected 1)",     telem.drs_active);
-    // } else {
-    //     ESP_LOGE(TAG, "f1_telemetry_get returned false — no valid data");
-    // }
-
-    // // Keep the task alive so the monitor stays connected
-    // while (1) {
-    //     vTaskDelay(pdMS_TO_TICKS(5000));
-    // }
-
-    // *** UDP Received Test ***
     // Initialise telemetry parser in auto-detect mode
     f1_telemetry_init(F1_GAME_AUTO);
 
-    // Connect to WiFi and start the UDP receive task
+    // Connect WiFi and start the UDP receive task.
+    // This blocks until WiFi is connected, then returns.
     udp_receiver_start();
 
-    // Poll telemetry data every 500ms and print to serial monitor
-    TelemetryData telem = {0};
-    while (1) {
-        if (f1_telemetry_get(&telem)) {
-            ESP_LOGI(TAG, "RPM=%d/%d gear=%d throttle=%d%% brake=%d%% drs=%d/%d bias=%.1f",
-                     telem.engine_rpm, telem.max_rpm,
-                     telem.gear,
-                     telem.throttle, telem.brake,
-                     telem.drs_active, telem.drs_allowed,
-                     telem.brake_bias);
-        } else {
-            ESP_LOGI(TAG, "Waiting for telemetry...");
-        }
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
+    // Start the dashboard render task.
+    // Priority 4 — one below the UDP receive task (5) so incoming
+    // packets are never delayed by LED rendering.
+    xTaskCreate(dashboard_task, "dashboard", 4096, NULL, 4, NULL);
+
+    ESP_LOGI(TAG, "Dashboard running");
+
+    // app_main() returns here — FreeRTOS keeps the tasks alive.
+    // This is valid and expected in ESP-IDF applications.
 }
