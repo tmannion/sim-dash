@@ -36,9 +36,8 @@ static void parse_f1_2021_telemetry(const uint8_t *data, uint32_t length)
 
     s_telemetry.engine_rpm = car->m_engineRPM;
     s_telemetry.gear       = (uint8_t)(car->m_gear < 0 ? 0 : car->m_gear);
-    // Convert raw 0-255 values to 0-100 percentage
-    s_telemetry.throttle   = (uint8_t)((car->m_throttle_raw / 255.0f) * 100.0f);
-    s_telemetry.brake      = (uint8_t)((car->m_brake_raw    / 255.0f) * 100.0f);
+    s_telemetry.throttle   = (uint8_t)(car->m_throttle * 100.0f);
+    s_telemetry.brake      = (uint8_t)(car->m_brake    * 100.0f);
     s_telemetry.drs_active = (car->m_drs == 1);
     s_telemetry.valid      = true;
 
