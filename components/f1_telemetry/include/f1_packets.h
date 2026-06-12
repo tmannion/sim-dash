@@ -39,14 +39,14 @@ typedef struct __attribute__((packed)) {
 // Per-car telemetry data (one entry in the array of 22)
 typedef struct __attribute__((packed)) {
     uint16_t m_speed;               // speed in km/h
-    uint8_t  m_throttle_raw;        // throttle 0–255 (convert: /255.0*100)
-    int8_t   m_steer;               // steering -127 to 127
-    uint8_t  m_brake_raw;           // brake 0–255 (convert: /255.0*100)
-    uint8_t  m_clutch;
+    float    m_throttle;            // 0.0 to 1.0
+    float    m_steer;               // -1.0 to 1.0
+    float    m_brake;               // 0.0 to 1.0
+    uint8_t  m_clutch;              // 0 to 100
     int8_t   m_gear;                // -1=reverse, 0=neutral, 1-8=gears
     uint16_t m_engineRPM;
     uint8_t  m_drs;                 // 0=off, 1=on
-    uint8_t  m_revLightsPercent;    // 0–100% of rev range
+    uint8_t  m_revLightsPercent;
     uint16_t m_revLightsBitValue;
     uint16_t m_brakesTemperature[4];
     uint8_t  m_tyresSurfaceTemperature[4];

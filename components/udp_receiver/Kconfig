@@ -1,0 +1,21 @@
+menu "UDP Receiver Config"
+
+    config UDP_WIFI_SSID
+        string "WiFi SSID"
+        default "your_ssid_here"
+        help
+            SSID of the WiFi network to connect to.
+
+    config UDP_WIFI_PASSWORD
+        string "WiFi Password"
+        default "your_password_here"
+        help
+            Password of the WiFi network.
+
+    config UDP_PORT
+        int "UDP Port"
+        default 20777
+        help
+            UDP port to listen on for F1 telemetry packets.
+
+endmenu
